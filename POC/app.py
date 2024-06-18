@@ -36,11 +36,14 @@ def set_chat_display_module():
             with st.spinner("Responding..."):
                 time_start = datetime.now()
                 response = chain.chat(prompt)
+                print(f"Last code generated: \n {chain.last_code_generated}")
+                print(f"The response = {response}")
                 time_finish = datetime.now()
                 st.write(response)
                 print("took (sec):" + str(int((time_finish-time_start).total_seconds())))
                 message = {"role": "assistant", "content": response}
                 st.session_state.message.append(message)
+
 
 def set_sidebar_settings_module():
     with st.sidebar:
@@ -52,6 +55,7 @@ def set_sidebar_settings_module():
             os.environ["PANDASAI_API_KEY"] = openai_api_key
             st.success("✅ Settings saved!")
 
+
 def set_sidebar_upload_xlsx_module():
     with st.sidebar:
         st.header("Feed your documents here")
@@ -60,7 +64,7 @@ def set_sidebar_upload_xlsx_module():
         st.session_state["xlsx_docs"].extend(
             st.file_uploader(
                 label="Upload your documents here",
-                type="xlsx",
+                type=["xlsx", "csv"],
                 accept_multiple_files=True,
             )
         )
@@ -77,7 +81,7 @@ def get_chain_when_pressing_process_button():
                 if st.session_state["chain"] is None:
                     st.error("❌ Processing failed.")
                     return
-                st.success("✅ xlsx filed have been processed!")
+                st.success("✅ File successfully processed!")
                 st.session_state["xlsxs_processed"] = True
 
 
