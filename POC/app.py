@@ -1,19 +1,41 @@
 import os
 
 from langchain_community.chat_message_histories import StreamlitChatMessageHistory
-
 import streamlit as st
 from chain_utils import get_chain_by_file
 from datetime import datetime
+import logging
 
 USER_AVATAR = "👤"
 BOT_AVATAR = "🦝"
+import time
+img_path = "./exports/charts/temp_chart.png"
+file_is_not_generated = "file is not generated"
+
+#---
+logger = logging.getLogger("LLM logger")
+logger.setLevel(logging.DEBUG)
+
+# remove all default handlers
+for handler in logger.handlers:
+    logger.removeHandler(handler)
+
+# create console handler and set level to debug
+console_handle = logging.StreamHandler()
+console_handle.setLevel(logging.DEBUG)
+
+# create formatter
+formatter = logging.Formatter("%(name)-20s - %(levelname)-8s - %(message)s")
+console_handle.setFormatter(formatter)
+
+# now add new handler to logger
+logger.addHandler(console_handle)
+# ---
 
 
 def set_chat_display_module():
     st.header("GENAI POC - Excel QnA")
     chain = st.session_state["chain"]
-
     if chain is None:
         st.info("Upload your Excel filed first.")
         return
@@ -29,7 +51,9 @@ def set_chat_display_module():
     for message in st.session_state.message:
         avatar = USER_AVATAR if message["role"] == "user" else BOT_AVATAR
         with st.chat_message(message["role"], avatar=avatar):
-            st.markdown(message["content"])
+            st.write(message["content"])
+            if type(message["content"]) == str and 'exports/charts' in message["content"]:
+                st.image(message["content"])
 
     if st.session_state.message[-1]["role"] != "assistant":
         with st.chat_message("assistant", avatar="🦝"):
@@ -38,9 +62,25 @@ def set_chat_display_module():
                 response = chain.chat(prompt)
                 time_finish = datetime.now()
                 st.write(response)
-                print("took (sec):" + str(int((time_finish-time_start).total_seconds())))
+                if type(response) == str and 'exports/charts' in response:
+                    time_to_wait = 4
+                    time_counter = 0
+                    while not os.path.exists(response):
+                        time.sleep(1)
+                        time_counter += 1
+                        logger.debug("waiting for file...")
+                        if time_counter > time_to_wait:
+                            logger.debug(file_is_not_generated)
+                            response = file_is_not_generated
+                            break
+                    if file_is_not_generated not in response:
+                        st.image(response)
+                    else:
+                        st.write(response)
+                logger.info("took (sec):" + str(int((time_finish - time_start).total_seconds())))
                 message = {"role": "assistant", "content": response}
                 st.session_state.message.append(message)
+
 
 def set_sidebar_settings_module():
     with st.sidebar:
@@ -52,15 +92,15 @@ def set_sidebar_settings_module():
             os.environ["PANDASAI_API_KEY"] = openai_api_key
             st.success("✅ Settings saved!")
 
+
 def set_sidebar_upload_xlsx_module():
     with st.sidebar:
         st.header("Feed your documents here")
-        # clear xlsx_docs and append all uploaded xlsx's
         st.session_state["xlsx_docs"].clear()
         st.session_state["xlsx_docs"].extend(
             st.file_uploader(
                 label="Upload your documents here",
-                type="xlsx",
+                type=["xlsx", "csv"],
                 accept_multiple_files=True,
             )
         )
@@ -77,7 +117,7 @@ def get_chain_when_pressing_process_button():
                 if st.session_state["chain"] is None:
                     st.error("❌ Processing failed.")
                     return
-                st.success("✅ xlsx filed have been processed!")
+                st.success("✅ File successfully processed!")
                 st.session_state["xlsxs_processed"] = True
 
 
@@ -87,6 +127,8 @@ def main():
         st.session_state["xlsx_docs"] = []
     if "chain" not in st.session_state:
         st.session_state["chain"] = None
+    if "current_image" not in st.session_state:
+        st.session_state["current_image"] = None
     if "xlsxs_processed" not in st.session_state:
         st.session_state["xlsx_processed"] = False
     if "langchain_messages" not in st.session_state:
